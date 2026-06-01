@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=yes, orientation=landscape">
+  <title>Танки: Битва 2Д • 100 уровней</title>
+  <style>
+    * {
+      margin: 0; padding: 0; box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent; user-select: none;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    body {
+      background: #0a1f1a; display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; overflow: hidden; touch-action: pan-x pan-y pinch-zoom;
+    }
+    #gameContainer {
+      position: relative; width: 100vw; height: 100vh; max-width: 100%; max-height: 100%;
+      background: radial-gradient(circle at 20% 20%, #2d5a4b, #0f2a21);
+      box-shadow: 0 0 40px rgba(0,180,120,0.5); display: flex;
+      flex-direction: column; align-items: center; justify-content: center; overflow: hidden;
+    }
+    canvas {
+      display: block; width: 100%; height: auto; background: #1e3b2f;
+      border: 3px solid #6bb89d; border-radius: 18px;
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.6), 0 10px 25px black; touch-action: none;
+    }
+    .screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(10, 25, 20, 0.92); backdrop-filter: blur(12px);
+      color: #e0f0e8; z-index: 20; border-radius: 18px; pointer-events: auto;
+    }
+    .hidden { display: none !important; }
+    .menu-panel {
+      background: linear-gradient(145deg, #1e4a3a, #0c2b21); border: 2px solid #8fc9b0;
+      border-radius: 45px; padding: 28px 24px;
+      box-shadow: 0 25px 45px rgba(0,0,0,0.7), inset 0 2px 8px rgba(255,255,200,0.5);
+      text-align: center; max-width: 90vw; width: 360px; max-height: 85vh; overflow-y: auto;
+    }
+    .menu-title {
+      font-size: 2.6rem; font-weight: 800; letter-spacing: 4px;
+      color: #f7e05e; text-shadow: 0 0 15px #ffb347, 0 4px 8px black; margin-bottom: 22px;
+    }
+    .btn {
+      background: linear-gradient(180deg, #f3cd5b 0%, #b8862c 100%); color: #1e2b1c;
+      font-weight: bold; font-size: 1.4rem; padding: 14px 20px; margin: 10px 0;
+      border-radius: 50px; width: 100%; box-shadow: 0 7px 0 #6b4e1c, 0 10px 18px black;
+      letter-spacing: 1px; text-transform: uppercase; cursor: pointer; border: 2px solid #ffe484;
+    }
+    .btn:active { transform: translateY(4px); box-shadow: 0 3px 0 #4b3512, 0 7px 12px black; }
+    .sound-toggle { background: linear-gradient(180deg, #578066, #2b412e); color: #f5e7c6; }
+    .level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; max-height: 50vh; overflow-y: auto; padding: 12px; margin: 10px 0; width: 100%; }
+    .level-btn {
+      background: radial-gradient(circle at 30% 20%, #4f7355, #1d3120); color: #ddd;
+      font-weight: bold; font-size: 1.1rem; padding: 12px 4px; border-radius: 18px;
+      border: 2px solid #6f9e7c; box-shadow: 0 3px 0 #0e1e12; cursor: pointer;
+    }
+    .level-btn.locked { opacity: 0.5; background: #2d3329; border-color: #5a5a4a; color: #aaa; }
+    .pause-btn {
+      position: absolute; top: 12px; right: 16px; z-index: 25;
+      background: rgba(0,0,0,0.6); color: white; border: 2px solid #c9a53b;
+      border-radius: 40px; padding: 10px 18px; font-weight: bold; font-size: 1.3rem;
+      backdrop-filter: blur(8px); pointer-events: auto;
+    }
+    .hud-top {
+      display: flex; justify-content: space-between; width: 100%;
+      color: white; font-weight: bold; text-shadow: 0 2px 6px black; font-size: 1.2rem; padding: 12px;
+    }
+    .ammo-indicator {
+      position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%);
+      color: #ffd966; font-weight: bold; font-size: 1.4rem; text-shadow: 0 0 15px black;
+      z-index: 15; background: rgba(0,0,0,0.5); padding: 6px 18px; border-radius: 30px; pointer-events: none;
+    }
+    .dual-control {
+      position: absolute; bottom: 30px; width: 70px; height: 70px; border-radius: 50%;
+      background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,200,0.35);
+      z-index: 30; touch-action: none; pointer-events: auto; backdrop-filter: blur(4px);
+    }
+    #controlLeft { left: 25px; } #controlRight { right: 25px; }
+    @media (max-width: 700px) { .menu-panel { width: 300px; } .level-grid { grid-template-columns: repeat(4,1fr); } }
+  </style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="900" height="500"></canvas>
+  <div id="ammoDisplay" class="ammo-indicator hidden">🔫 3/3</div>
+  <div id="controlLeft" class="dual-control hidden"></div>
+  <div id="controlRight" class="dual-control hidden"></div>
+
+  <div id="menuScreen" class="screen"><div class="menu-panel"><div class="menu-title">⚔️ ТАНКИ ⚔️</div><button class="btn" id="playBotsBtn">🤖 ИГРА С БОТАМИ</button><button class="btn" id="playTwoPlayersBtn">👥 НА ДВОИХ</button><button class="btn sound-toggle" id="soundToggleBtn">🔊 ЗВУК: ВКЛ</button></div></div>
+  <div id="twoPlayerModeScreen" class="screen hidden"><div class="menu-panel"><div class="menu-title">⚡ РЕЖИМ НА ДВОИХ</div><button class="btn" id="coopBotsBtn">🤝 ПРОТИВ БОТОВ</button><button class="btn" id="pvpBtn">⚔️ ДРУГ ПРОТИВ ДРУГА</button><button class="btn" id="backFromTwoPlayer">↩️ НАЗАД</button></div></div>
+  <div id="levelSelectScreen" class="screen hidden"><div class="menu-panel"><div style="font-size:1.8rem;margin-bottom:10px;">🎯 УРОВЕНЬ</div><div id="levelGridContainer" class="level-grid"></div><button class="btn" id="backToMenuFromLevels">↩️ НАЗАД</button></div></div>
+  <div id="pauseScreen" class="screen hidden"><div class="menu-panel"><div class="menu-title">⏸️ ПАУЗА</div><button class="btn" id="resumeBtn">▶️ ПРОДОЛЖИТЬ</button><button class="btn" id="quitToMenuBtn">🏠 В МЕНЮ</button></div></div>
+  <div id="hud" class="screen hidden" style="background:transparent;backdrop-filter:none;pointer-events:none;justify-content:flex-start;"><div class="hud-top"><span id="levelDisplay">УР.1</span><span id="enemiesCount">⚔️0</span><span id="playerHP">❤️3</span></div><button class="pause-btn" id="pauseGameBtn" style="pointer-events:auto;">⏸️</button></div>
+</div>
+
+<script>
+  (function() {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const menuScreen = document.getElementById('menuScreen');
+    const twoPlayerModeScreen = document.getElementById('twoPlayerModeScreen');
+    const levelSelectScreen = document.getElementById('levelSelectScreen');
+    const pauseScreen = document.getElementById('pauseScreen');
+    const hud = document.getElementById('hud');
+    const ammoDisplay = document.getElementById('ammoDisplay');
+    const controlLeft = document.getElementById('controlLeft');
+    const controlRight = document.getElementById('controlRight');
+    const levelGridContainer = document.getElementById('levelGridContainer');
+    const soundToggleBtn = document.getElementById('soundToggleBtn');
+
+    let soundEnabled = true, audioCtx = null;
+    function initAudio() { if(!audioCtx) try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){soundEnabled=false;} }
+    function playTone(t='shoot',v=0.15){ if(!soundEnabled||!audioCtx)return; if(audioCtx.state==='suspended')audioCtx.resume(); const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.connect(g);g.connect(audioCtx.destination);g.gain.value=v; if(t==='shoot'){o.frequency.value=280;o.type='square';g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.13);o.start();o.stop(audioCtx.currentTime+0.13);}else if(t==='hit'){o.frequency.value=90;o.type='sawtooth';g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.25);o.start();o.stop(audioCtx.currentTime+0.25);} }
+
+    const MAX_LEVEL=100, STORAGE_KEY='tanks2d_unlocked';
+    let currentLevel=1, unlockedLevel=1, gameMode=null, gameActive=false, gamePaused=false, gameLoopId=null, levelStartTimeout=null;
+    let player=null, player2=null, enemies=[], bullets=[], walls=[], powerups=[];
+    let playerAmmo=3, ammoRegenTimer=0, player2Ammo=3, ammo2RegenTimer=0;
+    const MAX_AMMO=3, AMMO_REGEN_DELAY=70;
+    const PLAYER_SIZE=28, ENEMY_SMALL=18, ENEMY_MEDIUM=26, ENEMY_BIG=34;
+    let playerRotationSpeed=0.04, playerMoveSpeed=1.8;
+    let leftPressed=false, rightPressed=false;
+    let playerShotFiredThisPress=false, player2ShotFiredThisPress=false;
+    let powerupSpawnTimer = 0;
+    const POWERUP_SPAWN_DELAY = 400; // примерно каждые 7 секунд
+
+    // Усиления игроков
+    let playerEffects = { shield:0, speed:0, infiniteAmmo:0 };
+    let player2Effects = { shield:0, speed:0, infiniteAmmo:0 };
+
+    function getHPBySize(s){if(s===ENEMY_SMALL)return 1;if(s===ENEMY_MEDIUM)return 2;if(s===ENEMY_BIG)return 3;return 2;}
+    function loadProgress(){try{const s=localStorage.getItem(STORAGE_KEY);if(s)unlockedLevel=parseInt(s,10)||1;}catch(e){}unlockedLevel=Math.min(MAX_LEVEL,Math.max(1,unlockedLevel));}
+    function saveProgress(){try{localStorage.setItem(STORAGE_KEY,unlockedLevel);}catch(e){}}
+    loadProgress();
+
+    function spawnPowerup() {
+      if (!gameActive || gamePaused) return;
+      const types = ['shield', 'speed', 'infiniteAmmo'];
+      const type = types[Math.floor(Math.random() * types.length)];
+      let x, y, attempts = 0;
+      do {
+        x = 40 + Math.random() * (canvas.width - 80);
+        y = 40 + Math.random() * (canvas.height - 80);
+        attempts++;
+      } while (attempts < 100 && (checkCollisionWithWalls({x,y,size:20}) || 
+               (player && Math.hypot(x-player.x, y-player.y) < 50) ||
+               enemies.some(e => Math.hypot(x-e.x, y-e.y) < 40)));
+      if (attempts < 100) {
+        powerups.push({ x, y, type, size: 18 });
+      }
+    }
+
+    function generateLevel(level){
+      walls=[];enemies=[];bullets=[];powerups=[];
+      let wc=8+Math.floor(level*0.7);if(wc>35)wc=35;
+      const mw=canvas.width,mh=canvas.height,mg=60;
+      for(let i=0;i<wc;i++){let x,y,w,h;if(Math.random()<0.6){w=18+Math.random()*55;h=10+Math.random()*14;}else{w=10+Math.random()*16;h=18+Math.random()*55;}x=mg+Math.random()*(mw-mg*2-w);y=mg+Math.random()*(mh-mg*2-h);if(Math.hypot(x+w/2-mw/2,y+h/2-mh/2)<90)continue;walls.push({x,y,w,h});}
+      let ec=2+Math.floor(level*0.45);if(ec>12)ec=12;
+      for(let i=0;i<ec;i++){
+        let size,r=Math.random();
+        if(level<10)size=ENEMY_SMALL;
+        else if(level<30)size=r<0.6?ENEMY_SMALL:ENEMY_MEDIUM;
+        else size=r<0.4?ENEMY_SMALL:(r<0.8?ENEMY_MEDIUM:ENEMY_BIG);
+        let ex,ey,att=0;
+        do{ex=70+Math.random()*(canvas.width-140);ey=70+Math.random()*(canvas.height-140);att++;}
+        while(att<200&&(checkCollisionWithWalls({x:ex,y:ey,size})||(player&&Math.hypot(ex-player.x,ey-player.y)<90)));
+        let enemySpeed = 0.35 + level * 0.04;
+        let fireRate = 110 - Math.floor(level * 0.5);
+        if(fireRate < 55) fireRate = 55;
+        enemies.push({x:ex,y:ey,size,hp:getHPBySize(size),maxHp:getHPBySize(size),angle:Math.random()*Math.PI*2,speed:enemySpeed,cooldown:0,fireRate,ammo:3,ammoTimer:0});
+      }
+      if(player){player.x=mw/2;player.y=mh/2;player.hp=3;player.maxHp=3;player.cooldown=0;}else player={x:mw/2,y:mh/2,size:PLAYER_SIZE,hp:3,maxHp:3,angle:0,speed:playerMoveSpeed,cooldown:0};
+      playerEffects = {shield:0, speed:0, infiniteAmmo:0};
+      playerAmmo=MAX_AMMO;ammoRegenTimer=0;
+      if(gameMode==='coop'||gameMode==='pvp'){if(player2){player2.x=mw/2+60;player2.y=mh/2;player2.hp=3;player2.maxHp=3;player2.cooldown=0;}else player2={x:mw/2+60,y:mh/2,size:PLAYER_SIZE,hp:3,maxHp:3,angle:0,speed:playerMoveSpeed,cooldown:0};player2Effects={shield:0,speed:0,infiniteAmmo:0};player2Ammo=MAX_AMMO;ammo2RegenTimer=0;}else player2=null;
+      leftPressed=rightPressed=false; playerShotFiredThisPress=player2ShotFiredThisPress=false;
+      powerupSpawnTimer = POWERUP_SPAWN_DELAY;
+      updateAmmoDisplay();
+    }
+
+    function checkCollisionWithWalls(obj){const s=obj.size||PLAYER_SIZE;const l=obj.x-s/2,r=obj.x+s/2,t=obj.y-s/2,b=obj.y+s/2;for(let w of walls)if(l<w.x+w.w&&r>w.x&&t<w.y+w.h&&b>w.y)return true;return false;}
+
+    function clampToMap(obj) {
+      const s = (obj.size || PLAYER_SIZE) / 2;
+      obj.x = Math.max(s, Math.min(canvas.width - s, obj.x));
+      obj.y = Math.max(s, Math.min(canvas.height - s, obj.y));
+    }
+
+    function moveEnemy(enemy){
+      if(!player)return;
+      const dx=player.x-enemy.x,dy=player.y-enemy.y,dist=Math.hypot(dx,dy);
+      if(dist>5){
+        enemy.angle=Math.atan2(dy,dx);
+        enemy.x+=Math.cos(enemy.angle)*enemy.speed;
+        enemy.y+=Math.sin(enemy.angle)*enemy.speed;
+        clampToMap(enemy);
+        if(checkCollisionWithWalls(enemy)){enemy.x-=Math.cos(enemy.angle)*enemy.speed;enemy.y-=Math.sin(enemy.angle)*enemy.speed;}
+      }
+      if(enemy.ammoTimer>0)enemy.ammoTimer--;
+      if(enemy.ammoTimer<=0&&enemy.ammo<3){enemy.ammo++;enemy.ammoTimer=120;}
+      if(enemy.cooldown>0)enemy.cooldown--;
+      if(enemy.cooldown<=0&&dist<350&&enemy.ammo>0){
+        enemy.cooldown=enemy.fireRate; enemy.ammo--;
+        bullets.push({x:enemy.x,y:enemy.y,angle:enemy.angle,speed:4.2,owner:'enemy',size:5});
+        if(soundEnabled)playTone('shoot',0.08);
+      }
+    }
+
+    function applyPowerup(target, type) {
+      if (target === player) {
+        if (type === 'shield') playerEffects.shield = 300; // 5 секунд при 60fps
+        else if (type === 'speed') playerEffects.speed = 300;
+        else if (type === 'infiniteAmmo') playerEffects.infiniteAmmo = 300;
+      } else if (target === player2) {
+        if (type === 'shield') player2Effects.shield = 300;
+        else if (type === 'speed') player2Effects.speed = 300;
+        else if (type === 'infiniteAmmo') player2Effects.infiniteAmmo = 300;
+      }
+    }
+
+    function update(){
+      if(!gameActive||gamePaused||!player)return;
+
+      // Таймеры эффектов
+      if (playerEffects.shield > 0) playerEffects.shield--;
+      if (playerEffects.speed > 0) playerEffects.speed--;
+      if (playerEffects.infiniteAmmo > 0) playerEffects.infiniteAmmo--;
+      if (player2) {
+        if (player2Effects.shield > 0) player2Effects.shield--;
+        if (player2Effects.speed > 0) player2Effects.speed--;
+        if (player2Effects.infiniteAmmo > 0) player2Effects.infiniteAmmo--;
+      }
+
+      // Регенерация патронов
+      if (!playerEffects.infiniteAmmo) {
+        if(ammoRegenTimer>0)ammoRegenTimer--;if(ammoRegenTimer<=0&&playerAmmo<MAX_AMMO){playerAmmo++;ammoRegenTimer=AMMO_REGEN_DELAY;}
+      }
+      if(player2 && !player2Effects.infiniteAmmo){
+        if(ammo2RegenTimer>0)ammo2RegenTimer--;if(ammo2RegenTimer<=0&&player2Ammo<MAX_AMMO){player2Ammo++;ammo2RegenTimer=AMMO_REGEN_DELAY;}
+      }
+
+      // Спавн усилений
+      if (powerupSpawnTimer > 0) powerupSpawnTimer--;
+      if (powerupSpawnTimer <= 0 && powerups.length < 3) {
+        spawnPowerup();
+        powerupSpawnTimer = POWERUP_SPAWN_DELAY + Math.floor(Math.random() * 200);
+      }
+
+      const playerMoving = leftPressed;
+      const player2Moving = (gameMode==='coop'||gameMode==='pvp') && rightPressed;
+
+      const pSpeed = playerEffects.speed > 0 ? playerMoveSpeed * 1.8 : playerMoveSpeed;
+      const p2Speed = (player2 && player2Effects.speed > 0) ? playerMoveSpeed * 1.8 : playerMoveSpeed;
+
+      // Игрок 1
+      if(!playerMoving){ player.angle += playerRotationSpeed; playerShotFiredThisPress = false; }
+      else {
+        const mx=Math.cos(player.angle)*pSpeed, my=Math.sin(player.angle)*pSpeed;
+        player.x+=mx;player.y+=my; clampToMap(player);
+        if(checkCollisionWithWalls(player)){player.x-=mx;player.y-=my;}
+        if(!playerShotFiredThisPress && player.cooldown<=0 && (playerAmmo>0 || playerEffects.infiniteAmmo)){
+          player.cooldown=22;
+          if (!playerEffects.infiniteAmmo) playerAmmo--;
+          playerShotFiredThisPress=true;
+          bullets.push({x:player.x,y:player.y,angle:player.angle,speed:5.5,owner:'player',size:5}); playTone('shoot',0.18);
+        }
+      }
+      if(player.cooldown>0)player.cooldown--;
+
+      // Игрок 2
+      if(player2){
+        if(!player2Moving){ player2.angle += playerRotationSpeed; player2ShotFiredThisPress = false; }
+        else {
+          const mx=Math.cos(player2.angle)*p2Speed, my=Math.sin(player2.angle)*p2Speed;
+          player2.x+=mx;player2.y+=my; clampToMap(player2);
+          if(checkCollisionWithWalls(player2)){player2.x-=mx;player2.y-=my;}
+          if(!player2ShotFiredThisPress && player2.cooldown<=0 && (player2Ammo>0 || player2Effects.infiniteAmmo)){
+            player2.cooldown=22;
+            if (!player2Effects.infiniteAmmo) player2Ammo--;
+            player2ShotFiredThisPress=true;
+            bullets.push({x:player2.x,y:player2.y,angle:player2.angle,speed:5.5,owner:'player2',size:5}); playTone('shoot',0.18);
+          }
+        }
+        if(player2.cooldown>0)player2.cooldown--;
+      }
+
+      for(let enemy of enemies) moveEnemy(enemy);
+
+      // Подбор усилений
+      for (let i = powerups.length-1; i >= 0; i--) {
+        const p = powerups[i];
+        if (player && Math.hypot(player.x-p.x, player.y-p.y) < PLAYER_SIZE/2 + p.size/2) {
+          applyPowerup(player, p.type);
+          powerups.splice(i,1);
+          continue;
+        }
+        if (player2 && Math.hypot(player2.x-p.x, player2.y-p.y) < PLAYER_SIZE/2 + p.size/2) {
+          applyPowerup(player2, p.type);
+          powerups.splice(i,1);
+        }
+      }
+
+      // Пули
+      for(let i=bullets.length-1;i>=0;i--){
+        const b=bullets[i];b.x+=Math.cos(b.angle)*b.speed;b.y+=Math.sin(b.angle)*b.speed;
+        if(b.x<5||b.x>canvas.width-5||b.y<5||b.y>canvas.height-5){bullets.splice(i,1);continue;}
+        if(walls.some(w=>b.x>w.x&&b.x<w.x+w.w&&b.y>w.y&&b.y<w.y+w.h)){bullets.splice(i,1);continue;}
+        if(b.owner==='player'||b.owner==='player2'){
+          for(let j=enemies.length-1;j>=0;j--){if(Math.hypot(b.x-enemies[j].x,b.y-enemies[j].y)<enemies[j].size/2+3){enemies[j].hp--;playTone('hit',0.2);bullets.splice(i,1);if(enemies[j].hp<=0)enemies.splice(j,1);break;}}
+          if(gameMode==='pvp'&&b.owner==='player'&&player2&&Math.hypot(b.x-player2.x,b.y-player2.y)<player2.size/2+3){
+            if (player2Effects.shield <= 0) { player2.hp--; }
+            bullets.splice(i,1); if(player2.hp<=0)gameOver('pvp_player1');
+          } else if(gameMode==='pvp'&&b.owner==='player2'&&player&&Math.hypot(b.x-player.x,b.y-player.y)<player.size/2+3){
+            if (playerEffects.shield <= 0) { player.hp--; }
+            bullets.splice(i,1); if(player.hp<=0)gameOver('pvp_player2');
+          }
+        } else if(b.owner==='enemy'){
+          if(player&&Math.hypot(b.x-player.x,b.y-player.y)<player.size/2+3){
+            if (playerEffects.shield <= 0) { player.hp--; }
+            playTone('hit',0.2);bullets.splice(i,1);if(player.hp<=0)gameOver('lose');
+          } else if(player2&&(gameMode==='coop'||gameMode==='pvp')&&Math.hypot(b.x-player2.x,b.y-player2.y)<player2.size/2+3){
+            if (player2Effects.shield <= 0) { player2.hp--; }
+            bullets.splice(i,1);if(player2.hp<=0)gameOver('lose');
+          }
+        }
+      }
+
+      updateAmmoDisplay();
+      if(enemies.length===0&&gameActive&&(gameMode==='bots'||gameMode==='coop')){
+        gameActive=false;
+        if(gameMode==='bots'&&currentLevel<MAX_LEVEL&&currentLevel>=unlockedLevel){unlockedLevel=Math.min(MAX_LEVEL,currentLevel+1);saveProgress();}
+        setTimeout(()=>{alert('✅ Уровень пройден!');if(gameMode==='bots'&&currentLevel<MAX_LEVEL)startGame('bots',currentLevel+1);else backToMenu();},50);
+      }
+      updateHUD();
+    }
+
+    function updateAmmoDisplay(){
+      let txt = `🔫 ${playerEffects.infiniteAmmo?'∞':playerAmmo}/${MAX_AMMO}`;
+      if(player2) txt += ` | P2:${player2Effects.infiniteAmmo?'∞':player2Ammo}/${MAX_AMMO}`;
+      ammoDisplay.innerText = txt;
+    }
+    function updateHUD(){if(!player)return;document.getElementById('levelDisplay').innerText=gameMode==='bots'?`УР.${currentLevel}`:'👥';document.getElementById('enemiesCount').innerText=`⚔️${enemies.length}`;document.getElementById('playerHP').innerText=`❤️${player.hp}${player2?' | P2:'+player2.hp:''}`;}
+
+    function gameOver(reason){
+      if(!gameActive)return;gameActive=false;
+      let msg='💥 Танк уничтожен.';if(reason==='pvp_player1')msg='🏆 Игрок 1 победил!';else if(reason==='pvp_player2')msg='🏆 Игрок 2 победил!';
+      setTimeout(()=>{alert(msg);if(reason==='lose'&&gameMode==='bots')startGame('bots',currentLevel);else backToMenu();},50);
+    }
+
+    function draw(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      for(let i=0;i<20;i++){ctx.fillStyle=i%2?'#2b5338':'#1f4029';ctx.fillRect(i*45,0,22,canvas.height);}
+      ctx.shadowColor='#00000080';ctx.shadowBlur=6;
+      walls.forEach(w=>{ctx.fillStyle='#6b5a4b';ctx.fillRect(w.x,w.y,w.w,w.h);ctx.fillStyle='#8b7a63';ctx.fillRect(w.x+2,w.y+2,w.w-4,w.h-4);ctx.strokeStyle='#4a3a2a';ctx.lineWidth=2;ctx.strokeRect(w.x,w.y,w.w,w.h);});
+      // Усиления (ящики)
+      powerups.forEach(p=>{
+        ctx.fillStyle='#8B5A2B'; ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+        ctx.fillStyle='#A0522D'; ctx.fillRect(p.x-p.size/2+2, p.y-p.size/2+2, p.size-4, p.size-4);
+        ctx.strokeStyle='#5C3A1E'; ctx.lineWidth=2; ctx.strokeRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+        ctx.fillStyle='white'; ctx.font='bold 10px "Segoe UI"';
+        let icon = '?'; if(p.type==='shield') icon='🛡️'; else if(p.type==='speed') icon='⚡'; else if(p.type==='infiniteAmmo') icon='∞';
+        ctx.fillText(icon, p.x-8, p.y+4);
+      });
+      ctx.shadowBlur=0;ctx.shadowColor='transparent';
+      enemies.forEach(e=>drawTank(e,'#b33e2c','#d95b4a'));
+      if(player) {
+        drawTank(player,'#3a7d5c','#5fa87a');
+        if (playerEffects.shield > 0) { ctx.strokeStyle='#00ffff'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(player.x,player.y,player.size/1.4,0,Math.PI*2); ctx.stroke(); }
+      }
+      if(player2) {
+        drawTank(player2,'#2c5f8a','#4f8ab5');
+        if (player2Effects.shield > 0) { ctx.strokeStyle='#00ffff'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(player2.x,player2.y,player2.size/1.4,0,Math.PI*2); ctx.stroke(); }
+      }
+      bullets.forEach(b=>{ctx.beginPath();ctx.arc(b.x,b.y,4,0,2*Math.PI);ctx.fillStyle=(b.owner==='player'||b.owner==='player2')?'#ffd966':'#ff704d';ctx.fill()});
+      ctx.font='bold 13px "Segoe UI"';ctx.fillStyle='white';ctx.strokeStyle='black';ctx.lineWidth=2.5;
+      [...enemies,player,...(player2?[player2]:[])].forEach(t=>{if(t){ctx.strokeText(`♥${t.hp}`,t.x-12,t.y-t.size/2-6);ctx.fillText(`♥${t.hp}`,t.x-12,t.y-t.size/2-6)}});
+    }
+
+    function drawTank(t,body,turret){ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.angle);ctx.fillStyle='#2f2f2f';ctx.fillRect(-t.size/2.2,-t.size/3,t.size/1.1,t.size/1.6);ctx.fillStyle=body;ctx.fillRect(-t.size/2.4,-t.size/3.5,t.size/1.2,t.size/1.8);ctx.strokeStyle='#111';ctx.lineWidth=1.5;ctx.strokeRect(-t.size/2.4,-t.size/3.5,t.size/1.2,t.size/1.8);ctx.fillStyle=turret;ctx.beginPath();ctx.ellipse(0,0,t.size/4.5,t.size/3.8,0,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#4d4d4d';ctx.fillRect(t.size/5,-3,t.size/2.2,6);ctx.restore();}
+
+    function gameLoop(){if(gameActive&&!gamePaused)update();draw();gameLoopId=requestAnimationFrame(gameLoop);}
+
+    function onPressStart(isPlayer2){
+      if(!gameActive||gamePaused)return;
+      if(!isPlayer2){ leftPressed=true; playerShotFiredThisPress=false; }
+      else { rightPressed=true; player2ShotFiredThisPress=false; }
+    }
+    function onPressEnd(isPlayer2){
+      if(!isPlayer2){ leftPressed=false; playerRotationSpeed = -playerRotationSpeed; }
+      else { rightPressed=false; }
+    }
+
+    canvas.addEventListener('touchstart',(e)=>{e.preventDefault(); if(gameMode==='bots') onPressStart(false); });
+    canvas.addEventListener('touchend',(e)=>{e.preventDefault(); if(gameMode==='bots') onPressEnd(false); });
+    canvas.addEventListener('touchcancel',(e)=>{e.preventDefault(); if(gameMode==='bots') onPressEnd(false); });
+    canvas.addEventListener('mousedown',()=>{if(gameMode==='bots')onPressStart(false);});
+    canvas.addEventListener('mouseup',()=>{if(gameMode==='bots')onPressEnd(false);});
+
+    controlLeft.addEventListener('touchstart',(e)=>{e.preventDefault();onPressStart(false);});
+    controlLeft.addEventListener('touchend',(e)=>{e.preventDefault();onPressEnd(false);});
+    controlLeft.addEventListener('touchcancel',(e)=>{e.preventDefault();onPressEnd(false);});
+    controlRight.addEventListener('touchstart',(e)=>{e.preventDefault();onPressStart(true);});
+    controlRight.addEventListener('touchend',(e)=>{e.preventDefault();onPressEnd(true);});
+    controlRight.addEventListener('touchcancel',(e)=>{e.preventDefault();onPressEnd(true);});
+    controlLeft.addEventListener('mousedown',()=>onPressStart(false));
+    controlLeft.addEventListener('mouseup',()=>onPressEnd(false));
+    controlRight.addEventListener('mousedown',()=>onPressStart(true));
+    controlRight.addEventListener('mouseup',()=>onPressEnd(true));
+
+    function pauseGame(){if(!gameActive)return;gamePaused=true;pauseScreen.classList.remove('hidden');}
+    function resumeGame(){gamePaused=false;pauseScreen.classList.add('hidden');}
+
+    function startGame(mode,level=1){
+      initAudio();if(levelStartTimeout)clearTimeout(levelStartTimeout);
+      gameActive=false;gamePaused=false;leftPressed=false;rightPressed=false;
+      pauseScreen.classList.add('hidden');menuScreen.classList.add('hidden');twoPlayerModeScreen.classList.add('hidden');levelSelectScreen.classList.add('hidden');
+      hud.classList.remove('hidden');ammoDisplay.classList.remove('hidden');
+      controlLeft.classList.add('hidden');controlRight.classList.add('hidden');
+      if(mode!=='bots'){ controlLeft.classList.remove('hidden'); controlRight.classList.remove('hidden'); }
+      gameMode=mode;if(mode==='bots')currentLevel=level;else currentLevel=0;
+      generateLevel(mode==='bots'?level:1);updateHUD();updateAmmoDisplay();
+      levelStartTimeout=setTimeout(()=>{gameActive=true;levelStartTimeout=null;},2000);
+    }
+
+    function backToMenu(){
+      gameActive=false;gamePaused=false;if(levelStartTimeout)clearTimeout(levelStartTimeout);
+      menuScreen.classList.remove('hidden');twoPlayerModeScreen.classList.add('hidden');levelSelectScreen.classList.add('hidden');
+      pauseScreen.classList.add('hidden');hud.classList.add('hidden');ammoDisplay.classList.add('hidden');
+      controlLeft.classList.add('hidden');controlRight.classList.add('hidden');
+    }
+
+    function renderLevelGrid(){
+      levelGridContainer.innerHTML='';
+      for(let i=1;i<=MAX_LEVEL;i++){const btn=document.createElement('button');btn.className='level-btn'+(i>unlockedLevel?' locked':'');btn.innerText=i;if(i<=unlockedLevel)btn.onclick=()=>{levelSelectScreen.classList.add('hidden');startGame('bots',i);};levelGridContainer.appendChild(btn);}
+    }
+
+    document.getElementById('playBotsBtn').addEventListener('click',()=>{renderLevelGrid();menuScreen.classList.add('hidden');levelSelectScreen.classList.remove('hidden');});
+    document.getElementById('playTwoPlayersBtn').addEventListener('click',()=>{menuScreen.classList.add('hidden');twoPlayerModeScreen.classList.remove('hidden');});
+    document.getElementById('backFromTwoPlayer').addEventListener('click',()=>{twoPlayerModeScreen.classList.add('hidden');menuScreen.classList.remove('hidden');});
+    document.getElementById('coopBotsBtn').addEventListener('click',()=>startGame('coop'));
+    document.getElementById('pvpBtn').addEventListener('click',()=>startGame('pvp'));
+    document.getElementById('backToMenuFromLevels').addEventListener('click',backToMenu);
+    document.getElementById('pauseGameBtn').addEventListener('click',pauseGame);
+    document.getElementById('resumeBtn').addEventListener('click',resumeGame);
+    document.getElementById('quitToMenuBtn').addEventListener('click',()=>{resumeGame();backToMenu();});
+    soundToggleBtn.addEventListener('click',()=>{soundEnabled=!soundEnabled;soundToggleBtn.innerText=soundEnabled?'🔊 ЗВУК: ВКЛ':'🔇 ЗВУК: ВЫКЛ';});
+
+    gameLoop();backToMenu();
+  })();
+</script>
+</body>
+</html>
